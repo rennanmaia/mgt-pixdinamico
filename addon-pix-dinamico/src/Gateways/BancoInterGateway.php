@@ -216,6 +216,8 @@ class BancoInterGateway implements GatewayInterface {
                 throw new Exception('URL base não configurada');
             }
             
+            // Autenticação OAuth2 do Banco Inter conforme exemplos de cURL:
+            // enviar client_id, client_secret, scope e grant_type no corpo
             $data = [
                 'client_id' => $this->config['client_id'],
                 'client_secret' => $this->config['client_secret'],
@@ -322,8 +324,9 @@ class BancoInterGateway implements GatewayInterface {
             ]);
         }
         
-        // Certificados SSL para produção
-        if (!$this->config['sandbox']) {
+        // Certificados SSL (Produção e Sandbox) se configurados
+        if (!empty($this->config['certificate_path']) && !empty($this->config['private_key_path']) &&
+            file_exists($this->config['certificate_path']) && file_exists($this->config['private_key_path'])) {
             curl_setopt_array($ch, [
                 CURLOPT_SSLCERT => $this->config['certificate_path'],
                 CURLOPT_SSLKEY => $this->config['private_key_path']
@@ -332,6 +335,7 @@ class BancoInterGateway implements GatewayInterface {
         
         if (!empty($data)) {
             if ($isAuth) {
+                // Autenticação: enviar dados como x-www-form-urlencoded, sem logar segredos
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
                 $headers[0] = 'Content-Type: application/x-www-form-urlencoded';
                 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -346,10 +350,20 @@ class BancoInterGateway implements GatewayInterface {
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         curl_close($ch);
         
-        // Log da requisição para debug
-        error_log("PIX API Request: {$method} {$url}");
-        error_log("PIX API Response Code: {$httpCode}");
-        error_log("PIX API Response: " . substr($response, 0, 500));
+        // Log da requisição para debug (arquivo dedicado, sem segredos)
+        $logFile = ADDON_PIX_DIR . '/logs/inter_http.log';
+        $logData = date('Y-m-d H:i:s') . "\n";
+        $logData .= "METHOD: {$method}\nURL: {$url}\nHTTP: {$httpCode}\nContent-Type: " . ($contentType ?: 'N/A') . "\n";
+        if ($isAuth) {
+            // Não logar client_secret
+            $safeData = $data;
+            if (isset($safeData['client_secret'])) {
+                $safeData['client_secret'] = '***';
+            }
+            $logData .= "AUTH DATA: " . json_encode($safeData) . "\n";
+        }
+        $logData .= "RESPONSE (primeiros 500 bytes):\n" . substr((string)$response, 0, 500) . "\n--------------------------\n";
+        file_put_contents($logFile, $logData, FILE_APPEND);
         
         if ($error) {
             throw new Exception('Erro cURL: ' . $error);
