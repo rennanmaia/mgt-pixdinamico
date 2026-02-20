@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIX Dinâmico - MK-AUTH</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .pix-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+        }
+        .card-custom {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            transition: transform 0.2s;
+        }
+        .card-custom:hover {
+            transform: translateY(-2px);
+        }
+        .qr-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        .copy-btn {
+            position: relative;
+        }
+        .copy-success {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-success.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="pix-header">
+        <div class="container">
+            <h1><i class="fas fa-qrcode"></i> PIX Dinâmico - Administração</h1>
+            <p class="mb-0">Gere PIX dinâmico para seus clientes</p>
+            <small class="text-light">
+                <i class="fas fa-info-circle"></i> 
+                Sistema integrado: Baixa automática em lançamentos e registro no caixa
+            </small>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        
+        <!-- Indicador de Modo Offline -->
+        <div class="alert alert-warning d-none" id="offlineAlert" role="alert">
+            <i class="fas fa-wifi"></i>
+            <strong>Modo Offline Ativo:</strong>
+            Sem conectividade externa detectada. PIX serão gerados em modo de desenvolvimento/teste.
+            <button type="button" class="btn btn-sm btn-outline-warning ms-2" onclick="checkConnectivity()">
+                <i class="fas fa-sync"></i> Verificar Conectividade
+            </button>
+        </div>
+        
+        <!-- Buscar Cliente/Lançamento -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card card-custom">
+                    <div class="card-header">
+                        <h5><i class="fas fa-search"></i> Buscar Lançamento</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="searchForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="searchType" class="form-label">Buscar por:</label>
+                                    <select class="form-select" id="searchType">
+                                        <option value="lanc_id">ID do Lançamento</option>
+                                        <option value="recibo">Número do Recibo</option>
+                                        <option value="cliente">Nome do Cliente</option>
+                                        <option value="login">Login do Cliente</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="searchValue" class="form-label">Valor de busca:</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="searchValue" placeholder="Digite o valor para busca...">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-search"></i> Buscar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultados da Busca -->
+        <div class="row mb-4" id="searchResults" style="display: none;">
+            <div class="col-12">
+                <div class="card card-custom">
+                    <div class="card-header">
+                        <h5><i class="fas fa-list"></i> Resultados da Busca</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="resultsTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Recibo</th>
+                                        <th>Cliente</th>
+                                        <th>Valor</th>
+                                        <th>Vencimento</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PIX Gerado -->
+        <div class="row mb-4" id="pixResult" style="display: none;">
+            <div class="col-12">
+                <div class="card card-custom">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-qrcode"></i> PIX Gerado</h5>
+                        <span class="badge bg-success">Ativo</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="qr-container">
+                                    <h6>QR Code</h6>
+                                    <div id="qrCodeContainer">
+                                        <!-- QR Code será inserido aqui -->
+                                    </div>
+                                    <small class="text-muted">Escaneie com seu banco para pagar</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Código PIX</h6>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="pixCode" readonly>
+                                    <button class="btn btn-outline-secondary copy-btn" type="button" onclick="copyToClipboard('pixCode')">
+                                        <i class="fas fa-copy"></i>
+                                        <div class="copy-success" id="copySuccess1">Copiado!</div>
+                                    </button>
+                                </div>
+
+                                <h6>Link Público</h6>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="publicUrl" readonly>
+                                    <button class="btn btn-outline-secondary copy-btn" type="button" onclick="copyToClipboard('publicUrl')">
+                                        <i class="fas fa-copy"></i>
+                                        <div class="copy-success" id="copySuccess2">Copiado!</div>
+                                    </button>
+                                    <a class="btn btn-primary" href="#" id="openPublicUrl" target="_blank">
+                                        <i class="fas fa-external-link-alt"></i>
+                                    </a>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-6">
+                                        <h6>Valor</h6>
+                                        <p class="h4 text-success" id="pixAmount">R$ 0,00</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <h6>Expira em</h6>
+                                        <p id="pixExpiry">-</p>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-success" onclick="shareWhatsapp()">
+                                        <i class="fab fa-whatsapp"></i> Compartilhar via WhatsApp
+                                    </button>
+                                    <button class="btn btn-info text-white" onclick="sendEmail()">
+                                        <i class="fas fa-envelope"></i> Enviar por Email
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="text-center" id="loading" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="mt-2">Processando...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Biblioteca de QRCode: usando CDN alternativo para evitar problemas de MIME em alguns ambientes -->
+    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        let currentPixData = null;
+
+        // Buscar lançamentos
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const searchType = document.getElementById('searchType').value;
+            const searchValue = document.getElementById('searchValue').value.trim();
+            
+            if (!searchValue) {
+                alert('Por favor, digite um valor para busca');
+                return;
+            }
+
+            searchLancamentos(searchType, searchValue);
+        });
+
+        function searchLancamentos(type, value) {
+            showLoading(true);
+            
+            fetch('api/search_lancamentos.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: type,
+                    value: value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                
+                if (data.success) {
+                    displaySearchResults(data.results);
+                } else {
+                    alert('Erro na busca: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                console.error('Erro:', error);
+                alert('Erro na comunicação com o servidor');
+            });
+        }
+
+        function displaySearchResults(results) {
+            const tbody = document.querySelector('#resultsTable tbody');
+            tbody.innerHTML = '';
+
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum resultado encontrado</td></tr>';
+            } else {
+                results.forEach(lanc => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${lanc.id}</td>
+                        <td>${lanc.recibo || '-'}</td>
+                        <td>${lanc.cliente_nome || lanc.login}</td>
+                        <td>R$ ${parseFloat(lanc.valor || 0).toFixed(2).replace('.', ',')}</td>
+                        <td>${formatDate(lanc.datavenc)}</td>
+                        <td><span class="badge bg-${getStatusColor(lanc.status)}">${lanc.status}</span></td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="generatePix(${lanc.id})">
+                                <i class="fas fa-qrcode"></i> Gerar PIX
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            document.getElementById('searchResults').style.display = 'block';
+        }
+
+        function generatePix(lancId) {
+            showLoading(true);
+            
+            fetch('api/generate_pix.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    lanc_id: lancId,
+                    gateway: 'banco_inter'
+                })
+            })
+            .then(async response => {
+                const responseText = await response.text();
+                
+                // Verificar se a resposta está vazia
+                if (!responseText || responseText.trim() === '') {
+                    throw new Error('Resposta vazia do servidor');
+                }
+                
+                try {
+                    return JSON.parse(responseText);
+                } catch (e) {
+                    console.error('Resposta não é JSON válido:', responseText);
+                    throw new Error('Resposta inválida do servidor: ' + e.message);
+                }
+            })
+            .then(data => {
+                showLoading(false);
+                
+                if (data.success) {
+                    displayPixResult(data.pix_data);
+                } else {
+                    displayError('Erro ao gerar PIX', data.error || 'Erro desconhecido', data.details);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                console.error('Erro completo:', error);
+                displayError('Erro na comunicação', error.message, {
+                    timestamp: new Date().toLocaleString(),
+                    userAgent: navigator.userAgent
+                });
+            });
+        }
+
+        function displayPixResult(pixData) {
+            currentPixData = pixData;
+            
+            // Gerar QR Code
+            const qrContainer = document.getElementById('qrCodeContainer');
+            qrContainer.innerHTML = '';
+            
+            if (pixData.qr_code && pixData.qr_code.startsWith('data:image')) {
+                // Se for imagem base64
+                const img = document.createElement('img');
+                img.src = pixData.qr_code;
+                img.style.maxWidth = '200px';
+                qrContainer.appendChild(img);
+            } else if (pixData.pix_code) {
+                // Gerar QR Code do código PIX
+                QRCode.toCanvas(pixData.pix_code, {width: 200}, function(error, canvas) {
+                    if (error) {
+                        console.error(error);
+                        qrContainer.innerHTML = '<p class="text-danger">Erro ao gerar QR Code</p>';
+                    } else {
+                        qrContainer.appendChild(canvas);
+                    }
+                });
+            }
+
+            // Preencher dados
+            document.getElementById('pixCode').value = pixData.pix_code || '';
+            document.getElementById('publicUrl').value = pixData.public_url || '';
+            document.getElementById('openPublicUrl').href = pixData.public_url || '#';
+            document.getElementById('pixAmount').textContent = 
+                'R$ ' + parseFloat(pixData.amount || 0).toFixed(2).replace('.', ',');
+            
+            if (pixData.expires_at) {
+                const expiryDate = new Date(pixData.expires_at);
+                document.getElementById('pixExpiry').textContent = 
+                    expiryDate.toLocaleString('pt-BR');
+            }
+
+            var pixResultDiv = document.getElementById('pixResult');
+            if (pixResultDiv) {
+                pixResultDiv.style.display = 'block';
+            }
+        }
+
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            element.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            
+            // Mostrar feedback
+            const successElement = document.getElementById(
+                elementId === 'pixCode' ? 'copySuccess1' : 'copySuccess2'
+            );
+            successElement.classList.add('show');
+            setTimeout(() => {
+                successElement.classList.remove('show');
+            }, 2000);
+        }
+
+        function shareWhatsapp() {
+            if (!currentPixData) return;
+            
+            const message = `💳 *PIX para pagamento*\n\n` +
+                `💰 Valor: R$ ${parseFloat(currentPixData.amount).toFixed(2).replace('.', ',')}\n\n` +
+                `🔗 Link para pagamento: ${currentPixData.public_url}\n\n` +
+                `📱 Ou copie o código PIX:\n${currentPixData.pix_code}`;
+            
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
+        function sendEmail() {
+            if (!currentPixData) return;
+            
+            const subject = 'PIX para Pagamento';
+            const body = `Olá!\n\n` +
+                `Você pode realizar o pagamento via PIX no valor de R$ ${parseFloat(currentPixData.amount).toFixed(2).replace('.', ',')}\n\n` +
+                `Link para pagamento: ${currentPixData.public_url}\n\n` +
+                `Ou copie o código PIX: ${currentPixData.pix_code}\n\n` +
+                `Obrigado!`;
+            
+            const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.open(mailtoUrl);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('pt-BR');
+        }
+        
+        function displayError(title, message, details) {
+            const resultsDiv = document.getElementById('pixResult');
+            
+            let detailsHtml = '';
+            if (details) {
+                detailsHtml = `
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-outline-danger" onclick="toggleErrorDetails()">
+                            <i class="fas fa-info-circle"></i> Ver Detalhes
+                        </button>
+                        <div id="errorDetails" style="display: none;" class="mt-2 p-3 bg-light rounded">
+                            <pre>${JSON.stringify(details, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            resultsDiv.innerHTML = `
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5><i class="fas fa-exclamation-triangle"></i> ${title}</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-danger"><strong>${message}</strong></p>
+                        
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-tools"></i> Soluções Recomendadas:</h6>
+                            <ul class="mb-0">
+                                <li>Execute: <code>php debug_json_api.php</code></li>
+                                <li>Teste conectividade: <code>php teste_urls_corrigidas.php</code></li>
+                                <li>Verifique logs em: <code>logs/</code></li>
+                                <li>Configure credenciais em <a href="config.php">config.php</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            <button onclick="testApiConnection()" class="btn btn-warning">
+                                <i class="fas fa-heartbeat"></i> Testar API
+                            </button>
+                            <button onclick="location.reload()" class="btn btn-secondary">
+                                <i class="fas fa-sync"></i> Tentar Novamente
+                            </button>
+                        </div>
+                        
+                        ${detailsHtml}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('pixContainer').style.display = 'block';
+        }
+        
+        function toggleErrorDetails() {
+            const details = document.getElementById('errorDetails');
+            details.style.display = details.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function testApiConnection() {
+            try {
+                showLoading(true);
+                
+                const response = await fetch('../api_test.php?action=test');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('✅ API funcionando: ' + data.message);
+                } else {
+                    alert('❌ API com problema: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Erro ao testar API: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                'aberto': 'warning',
+                'pago': 'success',
+                'vencido': 'danger',
+                'cancelado': 'secondary'
+            };
+            return colors[status] || 'secondary';
+        }
+        
+        // Funções de conectividade e modo offline
+        async function checkConnectivity() {
+            const alert = document.getElementById('offlineAlert');
+            
+            try {
+                // Testar conectividade com um endpoint simples
+                const response = await fetch('../diagnostico_conectividade.php', {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    
+                    // Verificar se há problemas de DNS nas respostas
+                    if (text.includes('Could not resolve host') || text.includes('DNS não resolveu')) {
+                        showOfflineMode(true);
+                    } else {
+                        showOfflineMode(false);
+                    }
+                } else {
+                    showOfflineMode(true);
+                }
+            } catch (error) {
+                console.log('Conectividade limitada detectada:', error);
+                showOfflineMode(true);
+            }
+        }
+        
+        function showOfflineMode(isOffline) {
+            const alert = document.getElementById('offlineAlert');
+            
+            if (isOffline) {
+                alert.classList.remove('d-none');
+                alert.classList.add('d-block');
+                
+                // Adicionar indicador em PIX gerados
+                const pixCards = document.querySelectorAll('.card');
+                pixCards.forEach(card => {
+                    if (card.innerHTML.includes('offline_mode')) {
+                        card.classList.add('border-warning');
+                    }
+                });
+            } else {
+                alert.classList.add('d-none');
+                alert.classList.remove('d-block');
+            }
+        }
+        
+        // Verificar conectividade ao carregar a página
+        document.addEventListener('DOMContentLoaded', function() {
+            checkConnectivity();
+            
+            // Verificar novamente a cada 5 minutos
+            setInterval(checkConnectivity, 300000);
+        });
+        
+        // Interceptar geração de PIX para mostrar modo offline
+        const originalGeneratePix = generatePix;
+        window.generatePix = async function(lancId) {
+            showLoading(true);
+            
+            try {
+                const result = await originalGeneratePix(lancId);
+                
+                // Se o PIX foi gerado em modo offline, mostrar aviso
+                if (result && result.offline_mode) {
+                    const pixContainer = document.getElementById('pixResult');
+                    if (pixContainer) {
+                        const offlineWarning = document.createElement('div');
+                        offlineWarning.className = 'alert alert-info mt-2';
+                        offlineWarning.innerHTML = `
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Modo Offline:</strong> Este PIX foi gerado para desenvolvimento/teste.
+                        `;
+                        pixContainer.prepend(offlineWarning);
+                    }
+                }
+                
+                return result;
+            } finally {
+                showLoading(false);
+            }
+        };
+    </script>
+</body>
+</html>
