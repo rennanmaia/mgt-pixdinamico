@@ -17,7 +17,7 @@ define('ADDON_PIX_URL', '/mgt-pixdinamico');
 $db_host = '127.0.0.1';
 $db_name = 'mkradius';
 $db_user = 'root';
-$db_pass = 'vertrigo';
+$db_pass = '';
 
 // Função para obter URL base dinamicamente
 function getBaseUrl() {
@@ -61,9 +61,9 @@ $gatewayConfig = [
         'sandbox' => true, // true para ambiente de teste
         'api_url' => 'https://cdpj.partners.bancointer.com.br',
         'api_url_sandbox' => 'https://cdpj-sandbox.partners.uatinter.co',
-        'client_id' => 'efc7dd92-0e4c-4efc-b7bc-9ce38d49ad12', // Configurar nas configurações do sistema
-        'client_secret' => '334e2e56-fd9d-41b3-8071-def4d5cd532c', // Configurar nas configurações do sistema
-        'pix_key' => 'cloudicombr@gmail.com', // Chave PIX configurável
+        'client_id' => '', // Configurar nas configurações do sistema
+        'client_secret' => '', // Configurar nas configurações do sistema
+        'pix_key' => '', // Chave PIX configurável
         'certificate_path' => ADDON_PIX_DIR . '/certificates/inter_cert.crt',
         'private_key_path' => ADDON_PIX_DIR . '/certificates/inter_key.key',
         'scope' => 'pix-write pix-read',
